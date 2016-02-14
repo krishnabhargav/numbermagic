@@ -40,7 +40,8 @@ type Person =
 
 type Number = 
     | Single of int
-    | Karmic of int
+    | Compound of int
+    | Both of Number * Number
  
 type Number with    
     static member private singleDigit i = 
@@ -52,32 +53,54 @@ type Number with
             else mod9
     
     static member convert (i : int) = 
-        match i with
-        | 11 | 13 | 14 | 16 | 19 | 22 -> Number.Karmic(i)
-        | _ -> (Number.singleDigit i) |> Number.Single
-    
-    static member liftUp (Number.Single(x)) = x |> Number.convert
+        Number.Both ((Number.singleDigit i) |> Number.Single, i |> Number.Compound)
     
     static member alwaysSingle n = 
         match n with
-        | Number.Karmic(x) ->  x |> Number.singleDigit |> Number.Single
+        | Number.Compound(x) ->  x |> Number.singleDigit |> Number.Single
         | Number.Single(x) as s -> s
+        | Number.Both (a, _) -> a
 
     static member combine f m n = 
-        let inner_combine (Number.Single(x)) (Number.Single(y)) = 
-            (f x y) |> Number.Single
-        inner_combine (Number.alwaysSingle m) (Number.alwaysSingle n)
-    
+        //printfn "%A %A" m n
+        let m1, m2 =
+            match m with
+            | Number.Both (Number.Single(x), Number.Compound(y)) -> x, y
+        let n1, n2 =
+            match n with
+            | Number.Both (Number.Single(x), Number.Compound(y)) -> x, y
+         
+        let a = f m1 n1
+        let b = f m2 n2
+        Number.Both(Number.Single (a) |> Number.alwaysSingle, Number.Compound (b))
+        
     static member sum = Number.combine (+)
     
     static member diff = Number.combine (-)
 
 //magic
 module Numbers = 
+    let cheiro c =
+        match c with
+        | 'a' | 'i' | 'j' | 'q' | 'y' -> 1
+        | 'b' | 'k' | 'r' -> 2
+        | 'c' | 'g' | 'l' | 's' -> 3
+        | 'd' | 'm' | 't' -> 4
+        | 'e' | 'h' | 'n' | 'x'  -> 5
+        | 'u' | 'v' | 'w' -> 6
+        | 'o' | 'z' -> 7
+        | 'f' | 'p' -> 8
+        | _ -> 0
+    
+    let normal c = 
+        let v = c |> int
+        let v1 = (v - 96) % 9
+        if v1 = 0 then 9 else v1
+    
     let reduce f (str : string) = 
         str.ToLower().ToCharArray()
         |> Array.filter f
-        |> Array.map (fun c -> (c |> int) - 96)
+        |> Array.map (cheiro)
         |> Array.sum
         |> Number.convert
     
@@ -88,7 +111,11 @@ module Numbers =
            mname |> reduce f
            lname |> reduce f |]
         |> Array.reduce (Number.sum)
-        |> Number.liftUp
+    
+    let nameNumber { firstName = fname; middleName = _; lastName = _ } = 
+        let f = fun x -> true
+        fname 
+        |> reduce f
     
     let talentNumber (dob : DateOfBirth) = 
         let { day = d; month = m; year = y } = dob
@@ -96,7 +123,6 @@ module Numbers =
            m |> Number.convert
            y |> Number.convert |]
         |> Array.reduce Number.sum
-        |> Number.liftUp
     
     let heartNumber { firstName = fname; middleName = mname; lastName = lname } = 
         let f = 
@@ -107,7 +133,6 @@ module Numbers =
            mname |> reduce f
            lname |> reduce f |]
         |> Array.reduce (Number.sum)
-        |> Number.liftUp
     
     let personalityNumber { firstName = fname; middleName = mname; lastName = lname } = 
         let f = 
@@ -118,20 +143,38 @@ module Numbers =
            mname |> reduce f
            lname |> reduce f |]
         |> Array.reduce (Number.sum)
-        |> Number.liftUp
     
     let ultimateNumber { name = name; dob = dob } = 
         let d = destinyNumber name
         let t = talentNumber dob
-        Number.sum d t |> Number.liftUp
+        Number.sum d t
     
     let challengeNumber { day = day; month = month; year = year } = 
         let convertSingle = (Number.convert >> Number.alwaysSingle)
         let nd = day |> convertSingle
         let nm = month |> convertSingle
         let ny = year |> convertSingle
-        let fs = Number.diff nm nd |> Number.liftUp
-        let sn = Number.diff nd ny |> Number.liftUp
-        let th = Number.diff fs sn |> Number.liftUp
-        let fr = Number.diff nm ny |> Number.liftUp
+        let fs = Number.diff nm nd 
+        let sn = Number.diff nd ny 
+        let th = Number.diff fs sn 
+        let fr = Number.diff nm ny
         fs , sn, th, fr
+
+(*        
+module BabyNames = 
+    open FSharp.Data
+    
+    let extractNames (url:string) = 
+        HtmlDocument.Load(url)
+        |> HtmlDocument.descendantsWithPath true (fun x -> HtmlNode.attributeValue "id" x = "name")
+        |> Seq.map (fst)
+        |> Seq.map (fun x -> HtmlNode.innerText)
+            
+    let private urlFormat = "http://www.nameslist.org/indian/baby-names/girl/{letter}/{number}"
+    
+    let forAlphabet (ah:string) = 
+        let url = urlFormat.Replace("{letter}", ah.ToUpper())
+        [1..100]
+        |> List.map (fun x -> extractNames (url.Replace("{number}", x |> string)))
+        
+*)
